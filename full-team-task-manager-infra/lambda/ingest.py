@@ -97,7 +97,7 @@ def handler(event, context):
             return _resp(400, {"message": "target must include at least one Slack user ID"})
 
         task_id = str(uuid.uuid4())
-        channel_id = os.environ.get("SLACK_CHANNEL_ID", "")  # set this as env var, or choose based on form
+        channel_id = os.environ["SLACK_CHANNEL_ID"]  # set this as env var, or choose based on form
 
         mention_str = " ".join([f"<@{u}>" for u in targets])
         due_ny = due_at.astimezone(NY_TZ)
@@ -113,11 +113,15 @@ def handler(event, context):
         slack_res = slack_api("chat.postMessage", {"channel": channel_id, "text": text})
         message_ts = slack_res["ts"]
 
-        permalink = slack_api("chat.getPermalink", {
-            "channel": channel_id,
-            "message_ts": message_ts,
-        })["permalink"]
-
+        permalink = None
+        try: 
+            permalink = slack_api("chat.getPermalink", {
+                "channel": channel_id,
+                "message_ts": message_ts,
+            })["permalink"]
+        except Exception as e:
+            print(f"Warning: failed to get permalink: {e}")
+            permalink = ""
         table = dynamodb.Table(TASKS_TABLE)
         table.put_item(Item={
             "taskId": task_id,
