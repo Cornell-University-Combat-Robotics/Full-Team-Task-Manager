@@ -18,6 +18,17 @@ def slack_api(method: str, payload: dict) -> dict:
         raise RuntimeError(f"Slack API error {method}: {out}")
     return out
 
+def dm_user(user_id: str, text: str):
+    conv = slack_api("conversations.open", {
+        "users": user_id
+    })
+    channel_id = conv["channel"]["id"]
+
+    slack_api("chat.postMessage", {
+        "channel": channel_id,
+        "text": text
+    })
+
 def handler(event, context):
     task_id = event["taskId"]
     table = dynamodb.Table(TASKS_TABLE)
@@ -25,6 +36,7 @@ def handler(event, context):
     if not item:
         return {"ok": True, "skipped": "task not found"}
 
+    ## 1. Post in the original channel
     mention_str = " ".join([f"<@{u}>" for u in item["targets"]])
     link = item.get("permalink", "")
     text = f"Reminder: please complete and reaction ✅ for task *{item['task']}* {mention_str}\n{link}"
@@ -34,4 +46,19 @@ def handler(event, context):
         # "thread_ts": item["messageTs"],
         "text": text
     })
+
+    ## 2. DM users individually
+    link = item.get("permalink", "")
+    text = (
+        f"⏰ Reminder: please complete and react ✅ for task "
+        f"*{item['task']}*\n{link}"
+    )
+
+    # DM each target user
+    for user_id in item["targets"]:
+        try:
+            dm_user(user_id, text)
+        except Exception as e:
+            print(f"Failed to DM {user_id}: {e}")
+
     return {"ok": True}
