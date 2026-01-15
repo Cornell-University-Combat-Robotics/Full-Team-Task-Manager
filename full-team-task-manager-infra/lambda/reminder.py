@@ -26,11 +26,12 @@ def handler(event, context):
         return {"ok": True, "skipped": "task not found"}
 
     mention_str = " ".join([f"<@{u}>" for u in item["targets"]])
-    text = f"Reminder: please complete and reaction ✅ for task *{item['task']}* {mention_str}"
+    link = item.get("permalink", "")
+    text = f"Reminder: please complete and reaction ✅ for task *{item['task']}* {mention_str}\n{link}"
 
     slack_api("chat.postMessage", {
         "channel": item["channelId"],
-        "thread_ts": item["messageTs"],
+        # "thread_ts": item["messageTs"],
         "text": text
     })
     return {"ok": True}

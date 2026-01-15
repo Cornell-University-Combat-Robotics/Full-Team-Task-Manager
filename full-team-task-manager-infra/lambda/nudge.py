@@ -1,9 +1,17 @@
 import json, os, urllib.request
 import boto3
+from zoneinfo import ZoneInfo
+from datetime import datetime
 
 dynamodb = boto3.resource("dynamodb")
 TASKS_TABLE = os.environ["TASKS_TABLE"]
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
+
+NY_TZ = ZoneInfo("America/New_York")
+
+def format_due_ny(due_utc: datetime) -> str:
+    due_ny = due_utc.astimezone(NY_TZ)
+    return due_ny.strftime("%b %d, %Y at %I:%M %p %Z")
 
 def slack_api(method: str, payload: dict) -> dict:
     url = f"https://slack.com/api/{method}"
@@ -39,10 +47,12 @@ def handler(event, context):
             reacted_users.update(r.get("users", []))
 
     missing = [u for u in item["targets"] if u not in reacted_users]
+
+    due_at = datetime.fromisoformat(item["dueAt"]) 
     for u in missing:
         slack_api("chat.postMessage", {
             "channel": u,  # DM by user ID works if bot has permission; otherwise open a conversation
-            "text": f"You haven’t completed ✅ task *{item['task']}* due {item['dueAt']}. Please complete the task ASAP."
+            "text": f"You haven’t completed ✅ task *{item['task']}* due {format_due_ny(due_at)}. Please complete the task ASAP."
         })
 
     return {"ok": True, "missing": missing}

@@ -2,6 +2,7 @@ import json
 import os
 import uuid
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo 
 import boto3
 import urllib.request
 
@@ -21,6 +22,12 @@ NAME_TO_SLACK_ID = {
     "shao": "U047QD6FGD9",
 }
 
+NY_TZ = ZoneInfo("America/New_York")
+
+def format_due_ny(due_utc: datetime) -> str:
+    due_ny = due_utc.astimezone(NY_TZ)
+    return due_ny.strftime("%b %d, %Y at %I:%M %p %Z")
+
 def slack_api(method: str, payload: dict) -> dict:
     url = f"https://slack.com/api/{method}"
     data = json.dumps(payload).encode("utf-8")
@@ -35,16 +42,24 @@ def slack_api(method: str, payload: dict) -> dict:
     return out
 
 def parse_due_datetime(due_str: str) -> datetime:
-    # Expect "YYYY-MM-DDTHH:mm" from datetime-local (no timezone). Assume America/New_York is common.
-    # For v1: treat it as UTC to avoid surprises, OR require ISO with timezone.
-    # Best practice: send ISO8601 w/ timezone from frontend.
+    """
+    Interpret datetime-local input as America/New_York time, then return UTC-aware datetime.
+    Accepts:
+      - "YYYY-MM-DDTHH:mm" (from <input type="datetime-local">)
+      - ISO with timezone (e.g., "2026-01-15T14:30:00-05:00" or "...Z")
+    """
+    # If user provides timezone explicitly, respect it
     try:
-        # naive local -> interpret as UTC (simple v1)
-        dt = datetime.strptime(due_str, "%Y-%m-%dT%H:%M")
-        return dt.replace(tzinfo=timezone.utc)
+        dt = datetime.fromisoformat(due_str.replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            return dt.astimezone(timezone.utc)
     except ValueError:
-        # allow ISO8601
-        return datetime.fromisoformat(due_str.replace("Z", "+00:00")).astimezone(timezone.utc)
+        pass
+
+    # Otherwise treat as NY local time
+    local_naive = datetime.strptime(due_str, "%Y-%m-%dT%H:%M")
+    local_aware = local_naive.replace(tzinfo=NY_TZ)
+    return local_aware.astimezone(timezone.utc)
 
 def parse_targets(target: str) -> list[str]:
     names = [t.strip().lower() for t in target.split(",") if t.strip()]
@@ -85,17 +100,23 @@ def handler(event, context):
         channel_id = os.environ.get("SLACK_CHANNEL_ID", "")  # set this as env var, or choose based on form
 
         mention_str = " ".join([f"<@{u}>" for u in targets])
+        due_ny = due_at.astimezone(NY_TZ)
 
         text = (
             f"*New task:* {task}\n"
             f"*Description:* {description}\n"
-            f"*Due:* {due_at.isoformat()}\n"
-            f"*Owner(s):* {mention_str}\n\n"
+            f"*Due:* {format_due_ny(due_at)}\n"
+            f"*People:* {mention_str}\n\n"
             f"Please react with ✅ for completion."
         )
 
         slack_res = slack_api("chat.postMessage", {"channel": channel_id, "text": text})
         message_ts = slack_res["ts"]
+
+        permalink = slack_api("chat.getPermalink", {
+            "channel": channel_id,
+            "message_ts": message_ts,
+        })["permalink"]
 
         table = dynamodb.Table(TASKS_TABLE)
         table.put_item(Item={
@@ -107,6 +128,7 @@ def handler(event, context):
             "messageTs": message_ts,
             "targets": targets,
             "createdAt": now.isoformat(),
+            "permalink": permalink,
             # optional TTL: delete 30 days after due
             "ttl": int(due_at.timestamp()) + 30 * 24 * 3600,
         })
