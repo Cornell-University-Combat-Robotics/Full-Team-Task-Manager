@@ -15,10 +15,20 @@
     <input type="text" id="target" placeholder="People responsible" required />
     <select id="remind" required>
       <option value="">Send reminders?</option>
-      <option value="yes">Yes</option>
+      <option value="default">Default</option>
+      <option value="custom">Custom</option>
       <option value="no">No</option>
     </select>
-    <button type="SUMBIT">Submit</button>
+    <div id="customRemindDiv" style="display: none;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap: 12px;">
+        <strong> Notifications</strong>
+        <button type="button" id="addReminder">Add Reminder</button>
+      </div>
+
+      <div id="reminderList" style="margin-top:10px; display:flex; flex-direction: column; gap:8px;"> </div>
+      <input type="hidden" id="remindersJson" name="remindersJson" value="[]" />
+    </div>
+    <button type="submit">Submit</button>
   </form>
 
   <p id="status"></p>
