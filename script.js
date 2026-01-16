@@ -9,6 +9,7 @@ document.getElementById("infoForm").addEventListener("submit", async (e) => {
     // datetime-local returns "YYYY-MM-DDTHH:mm"
     dueDate: document.getElementById("dueDate").value,
     target: document.getElementById("target").value.trim(), // e.g. "U12345,U67890" or "@name,@name2"
+    remind: document.getElementById("remind").value // choose wether or not to send reminders
   };
   document.getElementById("status").textContent = "Submitting...";
 

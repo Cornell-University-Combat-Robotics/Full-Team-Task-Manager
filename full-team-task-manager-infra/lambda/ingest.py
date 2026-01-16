@@ -86,6 +86,7 @@ def handler(event, context):
         description = payload["description"].strip()
         due_date_raw = payload["dueDate"].strip()
         target_raw = payload["target"].strip()
+        remind = payload["remind"]
 
         due_at = parse_due_datetime(due_date_raw)
         now = datetime.now(timezone.utc)
@@ -137,27 +138,29 @@ def handler(event, context):
             "ttl": int(due_at.timestamp()) + 30 * 24 * 3600,
         })
 
-        # Create schedules:
-        # A) if due within 24h => recurring 5-min reminders until due
-        seconds_until_due = (due_at - now).total_seconds()
-        if seconds_until_due <= 24 * 3600:
-            _create_or_update_schedule(
-                name=f"task-{task_id}-remind-5min",
-                schedule_expression="rate(5 minutes)",
-                start_time=now,
-                end_time=due_at,
-                target_arn=REMINDER_LAMBDA_ARN,
-                payload={"taskId": task_id, "mode": "fast"},
-            )
+        if remind == "yes":
+            # Create schedules:
+            # A) if due within 24h => recurring 5-min reminders until due
+            seconds_until_due = (due_at - now).total_seconds()
+            if seconds_until_due <= 24 * 3600:
+                _create_or_update_schedule(
+                    name=f"task-{task_id}-remind-5min",
+                    schedule_expression="rate(5 minutes)",
+                    start_time=now,
+                    end_time=due_at,
+                    target_arn=REMINDER_LAMBDA_ARN,
+                    payload={"taskId": task_id, "mode": "fast"},
+                )
+            
 
-        # B) one-time nudge check at due time (or due + 5 min grace)
-        nudge_time = due_at
-        _create_or_update_schedule(
-            name=f"task-{task_id}-nudge",
-            schedule_expression=f"at({nudge_time.strftime('%Y-%m-%dT%H:%M:%S')})",
-            target_arn=NUDGE_LAMBDA_ARN,
-            payload={"taskId": task_id},
-        )
+            # B) one-time nudge check at due time (or due + 5 min grace)
+            nudge_time = due_at
+            _create_or_update_schedule(
+                name=f"task-{task_id}-nudge",
+                schedule_expression=f"at({nudge_time.strftime('%Y-%m-%dT%H:%M:%S')})",
+                target_arn=NUDGE_LAMBDA_ARN,
+                payload={"taskId": task_id},
+            )
 
         return _resp(200, {"taskId": task_id, "messageTs": message_ts})
 
