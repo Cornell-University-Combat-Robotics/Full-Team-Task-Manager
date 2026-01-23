@@ -3,8 +3,8 @@ const API_URL = "https://20fphbhsbc.execute-api.us-east-1.amazonaws.com/prod/tas
 // ---------- Custom reminder UI wiring ----------
 const form = document.getElementById("infoForm");
 const remindSelect = document.getElementById("remind");
-const customBox = document.getElementById("customReminders");
-const addReminderBtn = document.getElementById("addReminderBtn");
+const customBox = document.getElementById("customRemindDiv");
+const addReminderBtn = document.getElementById("addReminder");
 const reminderList = document.getElementById("reminderList");
 const remindersJson = document.getElementById("remindersJson");
 const statusEl = document.getElementById("status");
@@ -115,7 +115,7 @@ form.addEventListener("submit", async (e) => {
     description: document.getElementById("description").value.trim(),
     dueDate: document.getElementById("dueDate").value, // "YYYY-MM-DDTHH:mm"
     target: document.getElementById("target").value.trim(),
-    remind: remindValue,
+    remindType: remindValue,
   };
 
   // Only include reminders if custom selected

@@ -1,7 +1,7 @@
 import json
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo 
 import boto3
 import urllib.request
@@ -86,7 +86,9 @@ def handler(event, context):
         description = payload["description"].strip()
         due_date_raw = payload["dueDate"].strip()
         target_raw = payload["target"].strip()
-        remind = payload["remind"]
+        remindType = payload["remindType"]
+        if remindType == "Custom":
+            reminders = payload["reminders"]
 
         due_at = parse_due_datetime(due_date_raw)
         now = datetime.now(timezone.utc)
@@ -138,7 +140,7 @@ def handler(event, context):
             "ttl": int(due_at.timestamp()) + 30 * 24 * 3600,
         })
 
-        if remind == "yes":
+        if remindType == "Default":
             # Create schedules:
             # A) if due within 24h => recurring 5-min reminders until due
             seconds_until_due = (due_at - now).total_seconds()
@@ -151,7 +153,6 @@ def handler(event, context):
                     target_arn=REMINDER_LAMBDA_ARN,
                     payload={"taskId": task_id, "mode": "fast"},
                 )
-            
 
             # B) one-time nudge check at due time (or due + 5 min grace)
             nudge_time = due_at
@@ -162,7 +163,31 @@ def handler(event, context):
                 payload={"taskId": task_id},
             )
 
-        return _resp(200, {"taskId": task_id, "messageTs": message_ts})
+            return _resp(200, {"taskId": task_id, "messageTs": message_ts})
+
+        elif remindType == "Custom":
+            # Check unit for reminder
+            for reminder in reminders:
+                if reminder["unit"] == "minutes":
+                    remindTime = due_ny - timedelta(minutes=reminder["amount"])
+                elif reminder["unit"] == "hours":
+                    remindTime = due_ny - timedelta(hours=reminder["amount"])
+                elif reminder["unit"] == "days":
+                    remindTime = due_ny - timedelta(days=reminder["amount"])
+                elif reminder["unit"] == "weeks":
+                    remindTime = due_ny - timedelta(weeks=reminder["amount"])
+
+                atTime = f"at({remindTime.strftime('%Y-%m-%dT%H:%M:%S')})"
+
+                _create_or_update_schedule(
+                    name=f"task-{task_id}-remind-{reminder['unit']}-{reminder['amount']}",
+                    schedule_expression=atTime,
+                    target_arn=REMINDER_LAMBDA_ARN,
+                    payload={"taskId": task_id},
+                )
+            return _resp(200, {"taskId": task_id, "messageTs": message_ts})
+
+
 
     except KeyError as e:
         return _resp(400, {"message": f"Missing field: {str(e)}"})
