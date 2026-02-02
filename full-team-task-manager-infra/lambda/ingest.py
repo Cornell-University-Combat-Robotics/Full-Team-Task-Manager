@@ -96,6 +96,10 @@ def handler(event, context):
         due_date_raw = payload["dueDate"].strip()
         target_raw = payload["target"].strip()
         estimated_time = payload.get("estimatedTime", "").strip()
+        if estimated_time:
+            estimated_time = int(estimated_time)
+        else:
+            estimated_time = 1  # default 1 hour
         comment = payload.get("comment", "").strip()
         link_url = payload.get("linkUrl", "").strip()
         link_text = payload.get("linkText", "").strip()
