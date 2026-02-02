@@ -93,7 +93,10 @@ def handler(event, context):
         description = payload["description"].strip()
         due_date_raw = payload["dueDate"].strip()
         target_raw = payload["target"].strip()
+        estimated_time = payload.get("estimatedTime", "").strip()
         comment = payload.get("comment", "").strip()
+        link_url = payload.get("linkUrl", "").strip()
+        link_text = payload.get("linkText", "").strip()
         remindType = payload["remindType"].strip().lower()  # normalize to lowercase
         if remindType == "custom":
             reminders = payload["reminders"]
@@ -114,12 +117,20 @@ def handler(event, context):
         mention_str = " ".join([f"<{u}>" if u.startswith("!") else f"<@{u}>" for u in targets])
         due_ny = due_at.astimezone(NY_TZ)
 
+        # Format hyperlink if provided (Slack format: <URL|Link Text>)
+        link_line = ""
+        if link_url:
+            if link_text:
+                link_line = f"*Link:* <{link_url}|{link_text}>\n"
+            else:
+                link_line = f"*Link:* <{link_url}>\n"
+
         text = (
             f"{mention_str}\n"
-            f"*Task:* {task}\n"
+            f"*Task:* {task} {link_line}\n"
             f"*Description:* {description}\n"
-            f"*Due:* {format_due_ny(due_at)}\n\n"
-            f"*Comment:* {comment}\n"
+            f"*Due:* {format_due_ny(due_at)}\n"
+            f"*Comment:* {comment}\n\n"
             f"Please react with ✅ for completion."
         )
 
@@ -164,8 +175,8 @@ def handler(event, context):
                     payload={"taskId": task_id, "mode": "fast"},
                 )
 
-            # B) one-time nudge check at due time (or due + 5 min grace)
-            nudge_time = due_at
+            # B) one-time nudge check 1 hour before due time
+            nudge_time = due_at - timedelta(hours=1)
             _create_or_update_schedule(
                 name=f"task-{task_id}-nudge",
                 schedule_expression=f"at({nudge_time.strftime('%Y-%m-%dT%H:%M:%S')})",
