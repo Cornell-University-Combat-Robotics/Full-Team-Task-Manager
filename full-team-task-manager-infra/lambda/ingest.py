@@ -66,7 +66,14 @@ def parse_targets(target: str) -> list[str]:
     ids = []
     unknown = []
     for n in names:
-        if n in NAME_TO_SLACK_ID:
+        # Handle special channel mentions
+        if n in ("channel", "@channel"):
+            ids.append("!channel")
+        elif n in ("here", "@here"):
+            ids.append("!here")
+        elif n in ("everyone", "@everyone"):
+            ids.append("!everyone")
+        elif n in NAME_TO_SLACK_ID:
             ids.append(NAME_TO_SLACK_ID[n])
         else:
             unknown.append(n)
@@ -102,7 +109,8 @@ def handler(event, context):
         task_id = str(uuid.uuid4())
         channel_id = os.environ["SLACK_CHANNEL_ID"]  # set this as env var, or choose based on form
 
-        mention_str = " ".join([f"<@{u}>" for u in targets])
+        # Format mentions: special channel mentions start with !, regular users with @
+        mention_str = " ".join([f"<!{u}>" if u.startswith("!") else f"<@{u}>" for u in targets])
         due_ny = due_at.astimezone(NY_TZ)
 
         text = (
