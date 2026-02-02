@@ -163,20 +163,40 @@ def handler(event, context):
 
         if remindType == "default":
             # Create schedules:
-            # A) if due within 24h => recurring 5-min reminders until due
             seconds_until_due = (due_at - now).total_seconds()
-            if seconds_until_due <= 24 * 3600:
+            
+            # A) If due in more than 1 day: reminder 1 day before
+            if seconds_until_due > 24 * 3600:
+                reminder_1day = due_at - timedelta(days=1)
                 _create_or_update_schedule(
-                    name=f"task-{task_id}-remind-5min",
-                    schedule_expression="rate(5 minutes)",
+                    name=f"task-{task_id}-remind-1day",
+                    schedule_expression=f"at({reminder_1day.strftime('%Y-%m-%dT%H:%M:%S')})",
+                    target_arn=REMINDER_LAMBDA_ARN,
+                    payload={"taskId": task_id},
+                )
+                
+                # Also reminder at 50% time left (halfway point)
+                halfway_time = now + timedelta(seconds=seconds_until_due / 2)
+                _create_or_update_schedule(
+                    name=f"task-{task_id}-remind-50pct",
+                    schedule_expression=f"at({halfway_time.strftime('%Y-%m-%dT%H:%M:%S')})",
+                    target_arn=REMINDER_LAMBDA_ARN,
+                    payload={"taskId": task_id},
+                )
+            
+            # B) If due within 24h: recurring 10-min reminders until due
+            elif seconds_until_due <= 24 * 3600:
+                _create_or_update_schedule(
+                    name=f"task-{task_id}-remind-10min",
+                    schedule_expression="rate(10 minutes)",
                     start_time=now,
                     end_time=due_at,
                     target_arn=REMINDER_LAMBDA_ARN,
                     payload={"taskId": task_id, "mode": "fast"},
                 )
 
-            # B) one-time nudge check 1 hour before due time
-            nudge_time = due_at - timedelta(hours=1)
+            # C) one-time nudge check based on estimated time before due
+            nudge_time = due_at - timedelta(hours=estimated_time)
             _create_or_update_schedule(
                 name=f"task-{task_id}-nudge",
                 schedule_expression=f"at({nudge_time.strftime('%Y-%m-%dT%H:%M:%S')})",

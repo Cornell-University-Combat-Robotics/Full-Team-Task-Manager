@@ -146,8 +146,11 @@ form.addEventListener("submit", async (e) => {
     task: document.getElementById("task").value.trim(),
     description: document.getElementById("description").value.trim(),
     dueDate: document.getElementById("dueDate").value, // "YYYY-MM-DDTHH:mm"
+    estimatedTime: document.getElementById("estimatedTime")?.value.trim() || "",
     target: targetValue,
     remindType: remindValue,
+    linkUrl: document.getElementById("linkUrl")?.value.trim() || "",
+    linkText: document.getElementById("linkText")?.value.trim() || "",
   };
 
   // Only include reminders if custom selected

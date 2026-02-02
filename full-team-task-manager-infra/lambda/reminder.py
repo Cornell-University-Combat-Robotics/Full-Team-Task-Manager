@@ -40,27 +40,20 @@ def handler(event, context):
     # Format mentions: channel mentions start with !, regular users don't
     mention_str = " ".join([f"<{u}>" if u.startswith("!") else f"<@{u}>" for u in item["targets"]])
     link = item.get("permalink", "")
-    text = f"Reminder: please complete and reaction ✅ for task *{item['task']}* {mention_str}\n{link}"
+    text = f"Reminder: please complete and react ✅ for task *{item['task']}* {mention_str}\n{link}"
 
     slack_api("chat.postMessage", {
         "channel": item["channelId"],
-        # "thread_ts": item["messageTs"],
         "text": text
     })
 
-    ## 2. DM users individually
-    link = item.get("permalink", "")
-    text = (
-        f"⏰ Reminder: please complete and react ✅ for task "
-        f"*{item['task']}*\n{link}"
-    )
-
-    # DM each target user (skip channel mentions like !channel, !here, !everyone)
+    ## 2. DM each target user (skip channel mentions like !channel, !here, !everyone)
+    dm_text = f"Reminder: please complete and react ✅ for task *{item['task']}*\n{link}"
     for user_id in item["targets"]:
         if user_id.startswith("!"):
             continue  # Skip channel mentions
         try:
-            dm_user(user_id, text)
+            dm_user(user_id, dm_text)
         except Exception as e:
             print(f"Failed to DM {user_id}: {e}")
 

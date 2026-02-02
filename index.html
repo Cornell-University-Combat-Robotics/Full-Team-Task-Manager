@@ -10,8 +10,12 @@
 
   <form id="infoForm">
     <input type="text" id="task" placeholder="Your task" required />
+    <input type="url" id="linkUrl" placeholder="Link URL, added to the end of task (optional)" />
+    <input type="text" id="linkText" placeholder="Link display text (optional)" />
     <input type="text" id="description" placeholder="Your description" required />
     <input type="datetime-local" id="dueDate" required />
+    <input type="number" id="estimatedTime in hours" placeholder="Estimated hours to complete" min="1" step="0.5" />
+    <input type="text" id="comment" placeholder="Additional comments (optional)" />
     <select id="targetSelect" required>
       <option value="">Select who to notify...</option>
       <option value="channel">@channel (notify all members)</option>

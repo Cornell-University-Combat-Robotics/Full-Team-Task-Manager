@@ -26,6 +26,17 @@ def slack_api(method: str, payload: dict) -> dict:
         raise RuntimeError(f"Slack API error {method}: {out}")
     return out
 
+def dm_user(user_id: str, text: str):
+    conv = slack_api("conversations.open", {
+        "users": user_id
+    })
+    channel_id = conv["channel"]["id"]
+
+    slack_api("chat.postMessage", {
+        "channel": channel_id,
+        "text": text
+    })
+
 def handler(event, context):
     task_id = event["taskId"]
     table = dynamodb.Table(TASKS_TABLE)
@@ -52,9 +63,9 @@ def handler(event, context):
 
     due_at = datetime.fromisoformat(item["dueAt"]) 
     for u in missing:
-        slack_api("chat.postMessage", {
-            "channel": u,  # DM by user ID works if bot has permission; otherwise open a conversation
-            "text": f"You haven’t completed ✅ task *{item['task']}* due {format_due_ny(due_at)}. Please complete the task ASAP."
-        })
+        try:
+            dm_user(u, f"You haven't completed ✅ task *{item['task']}* due {format_due_ny(due_at)}. Please complete the task ASAP.")
+        except Exception as e:
+            print(f"Failed to DM {u}: {e}")
 
     return {"ok": True, "missing": missing}
