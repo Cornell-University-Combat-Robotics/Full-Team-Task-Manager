@@ -93,6 +93,7 @@ def handler(event, context):
         description = payload["description"].strip()
         due_date_raw = payload["dueDate"].strip()
         target_raw = payload["target"].strip()
+        comment = payload.get("comment", "").strip()
         remindType = payload["remindType"].strip().lower()  # normalize to lowercase
         if remindType == "custom":
             reminders = payload["reminders"]
@@ -109,15 +110,16 @@ def handler(event, context):
         task_id = str(uuid.uuid4())
         channel_id = os.environ["SLACK_CHANNEL_ID"]  # set this as env var, or choose based on form
 
-        # Format mentions: special channel mentions start with !, regular users with @
-        mention_str = " ".join([f"<!{u}>" if u.startswith("!") else f"<@{u}>" for u in targets])
+        # Format mentions: special channel mentions already have !, regular users need @
+        mention_str = " ".join([f"<{u}>" if u.startswith("!") else f"<@{u}>" for u in targets])
         due_ny = due_at.astimezone(NY_TZ)
 
         text = (
-            f"*New task:* {task}\n"
+            f"{mention_str}\n"
+            f"*Task:* {task}\n"
             f"*Description:* {description}\n"
-            f"*Due:* {format_due_ny(due_at)}\n"
-            f"*People:* {mention_str}\n\n"
+            f"*Due:* {format_due_ny(due_at)}\n\n"
+            f"*Comment:* {comment}\n"
             f"Please react with ✅ for completion."
         )
 
