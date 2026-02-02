@@ -93,8 +93,8 @@ def handler(event, context):
         description = payload["description"].strip()
         due_date_raw = payload["dueDate"].strip()
         target_raw = payload["target"].strip()
-        remindType = payload["remindType"]
-        if remindType == "Custom":
+        remindType = payload["remindType"].strip().lower()  # normalize to lowercase
+        if remindType == "custom":
             reminders = payload["reminders"]
 
         due_at = parse_due_datetime(due_date_raw)
@@ -148,7 +148,7 @@ def handler(event, context):
             "ttl": int(due_at.timestamp()) + 30 * 24 * 3600,
         })
 
-        if remindType == "Default":
+        if remindType == "default":
             # Create schedules:
             # A) if due within 24h => recurring 5-min reminders until due
             seconds_until_due = (due_at - now).total_seconds()
@@ -171,9 +171,7 @@ def handler(event, context):
                 payload={"taskId": task_id},
             )
 
-            return _resp(200, {"taskId": task_id, "messageTs": message_ts})
-
-        elif remindType == "Custom":
+        elif remindType == "custom":
             # Check unit for reminder
             for reminder in reminders:
                 if reminder["unit"] == "minutes":
@@ -193,7 +191,9 @@ def handler(event, context):
                     target_arn=REMINDER_LAMBDA_ARN,
                     payload={"taskId": task_id},
                 )
-            return _resp(200, {"taskId": task_id, "messageTs": message_ts})
+        # elif remindType == "no": do nothing, no reminders
+
+        return _resp(200, {"taskId": task_id, "messageTs": message_ts})
 
 
 

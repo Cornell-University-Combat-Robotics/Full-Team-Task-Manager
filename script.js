@@ -9,6 +9,11 @@ const reminderList = document.getElementById("reminderList");
 const remindersJson = document.getElementById("remindersJson");
 const statusEl = document.getElementById("status");
 
+// ---------- Target selection UI wiring ----------
+const targetSelect = document.getElementById("targetSelect");
+const targetCustom = document.getElementById("targetCustom");
+const targetHint = document.getElementById("targetHint");
+
 let reminders = []; // [{ amount: 10, unit: "minutes" }, ...]
 
 function syncHiddenField() {
@@ -99,9 +104,28 @@ if (addReminderBtn) {
   });
 }
 
+// ---------- Target selection toggle ----------
+function showOrHideTargetCustom() {
+  const isOther = targetSelect.value === "other";
+  if (targetCustom) {
+    targetCustom.style.display = isOther ? "block" : "none";
+    if (isOther) {
+      targetCustom.required = true;
+    } else {
+      targetCustom.required = false;
+    }
+  }
+  if (targetHint) {
+    targetHint.style.display = isOther ? "block" : "none";
+  }
+}
+
+if (targetSelect) targetSelect.addEventListener("change", showOrHideTargetCustom);
+
 // Initialize UI on page load
 showOrHideCustomUI();
 renderReminderList();
+showOrHideTargetCustom();
 
 // ---------- Form submit (your original API call, extended) ----------
 form.addEventListener("submit", async (e) => {
@@ -110,11 +134,19 @@ form.addEventListener("submit", async (e) => {
   const remindValue = remindSelect.value;
 
   // Build payload
+  // Determine target value based on dropdown selection
+  let targetValue;
+  if (targetSelect.value === "other") {
+    targetValue = targetCustom.value.trim();
+  } else {
+    targetValue = targetSelect.value;
+  }
+
   const payload = {
     task: document.getElementById("task").value.trim(),
     description: document.getElementById("description").value.trim(),
     dueDate: document.getElementById("dueDate").value, // "YYYY-MM-DDTHH:mm"
-    target: document.getElementById("target").value.trim(),
+    target: targetValue,
     remindType: remindValue,
   };
 

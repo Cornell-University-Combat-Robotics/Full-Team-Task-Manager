@@ -12,9 +12,14 @@
     <input type="text" id="task" placeholder="Your task" required />
     <input type="text" id="description" placeholder="Your description" required />
     <input type="datetime-local" id="dueDate" required />
-    <input type="text" id="target" placeholder="e.g., shao, channel" required />
-    <small style="display:block; margin: -8px 0 12px 0; color: #666;">
-      Use names (shao) or @channel, @here, @everyone. Separate with commas.
+    <select id="targetSelect" required>
+      <option value="">Select who to notify...</option>
+      <option value="channel">@channel (notify all members)</option>
+      <option value="other">Other (specific people)</option>
+    </select>
+    <input type="text" id="targetCustom" placeholder="e.g., shao, alex" style="display:none; margin-top: 8px;" />
+    <small id="targetHint" style="display:none; margin: -8px 0 12px 0; color: #666;">
+      Enter names separated by commas. You can also use channel, here, or everyone.
     </small>
     <select id="remind" required>
       <option value="">Send reminders?</option>
