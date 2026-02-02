@@ -46,7 +46,9 @@ def handler(event, context):
         if r.get("name") == "white_check_mark":
             reacted_users.update(r.get("users", []))
 
-    missing = [u for u in item["targets"] if u not in reacted_users]
+    # Filter out channel mentions (!channel, !here, !everyone) as they can't react
+    user_targets = [u for u in item["targets"] if not u.startswith("!")]
+    missing = [u for u in user_targets if u not in reacted_users]
 
     due_at = datetime.fromisoformat(item["dueAt"]) 
     for u in missing:
