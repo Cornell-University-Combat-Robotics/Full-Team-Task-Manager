@@ -36,7 +36,7 @@ def handler(event, context):
     if not item:
         return {"ok": True, "skipped": "task not found"}
 
-    ## 1. Post in the original channel
+    ## Post in the original channel
     # Format mentions: channel mentions start with !, regular users don't
     mention_str = " ".join([f"<{u}>" if u.startswith("!") else f"<@{u}>" for u in item["targets"]])
     link = item.get("permalink", "")
@@ -46,15 +46,4 @@ def handler(event, context):
         "channel": item["channelId"],
         "text": text
     })
-
-    ## 2. DM each target user (skip channel mentions like !channel, !here, !everyone)
-    dm_text = f"Reminder: please complete and react ✅ for task *{item['task']}*\n{link}"
-    for user_id in item["targets"]:
-        if user_id.startswith("!"):
-            continue  # Skip channel mentions
-        try:
-            dm_user(user_id, dm_text)
-        except Exception as e:
-            print(f"Failed to DM {user_id}: {e}")
-
     return {"ok": True}

@@ -31,7 +31,6 @@ def dm_user(user_id: str, text: str):
         "users": user_id
     })
     channel_id = conv["channel"]["id"]
-
     slack_api("chat.postMessage", {
         "channel": channel_id,
         "text": text
