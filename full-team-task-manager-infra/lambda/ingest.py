@@ -18,6 +18,8 @@ REMINDER_LAMBDA_ARN = os.environ["REMINDER_LAMBDA_ARN"]
 NUDGE_LAMBDA_ARN = os.environ["NUDGE_LAMBDA_ARN"]
 SCHEDULER_INVOKE_ROLE_ARN = os.environ["SCHEDULER_INVOKE_ROLE_ARN"]
 
+table = dynamodb.Table(TASKS_TABLE)
+
 NAME_TO_SLACK_ID = {
     "shao": "U047QD6FGD9",
 }
@@ -121,9 +123,9 @@ def handler(event, context):
         link_line = ""
         if link_url:
             if link_text:
-                link_line = f"*Link:* <{link_url}|{link_text}>\n"
+                link_line = f"<{link_url}|{link_text}>\n"
             else:
-                link_line = f"*Link:* <{link_url}>\n"
+                link_line = f"<{link_url}>\n"
 
         text = (
             f"{mention_str}\n"
@@ -146,7 +148,6 @@ def handler(event, context):
         except Exception as e:
             print(f"Warning: failed to get permalink: {e}")
             permalink = ""
-        table = dynamodb.Table(TASKS_TABLE)
         table.put_item(Item={
             "taskId": task_id,
             "task": task,

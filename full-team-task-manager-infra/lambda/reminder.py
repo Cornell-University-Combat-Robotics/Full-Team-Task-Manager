@@ -5,6 +5,8 @@ dynamodb = boto3.resource("dynamodb")
 TASKS_TABLE = os.environ["TASKS_TABLE"]
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 
+table = dynamodb.Table(TASKS_TABLE)
+
 def slack_api(method: str, payload: dict) -> dict:
     url = f"https://slack.com/api/{method}"
     data = json.dumps(payload).encode("utf-8")
@@ -31,7 +33,6 @@ def dm_user(user_id: str, text: str):
 
 def handler(event, context):
     task_id = event["taskId"]
-    table = dynamodb.Table(TASKS_TABLE)
     item = table.get_item(Key={"taskId": task_id}).get("Item")
     if not item:
         return {"ok": True, "skipped": "task not found"}

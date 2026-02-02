@@ -7,6 +7,8 @@ dynamodb = boto3.resource("dynamodb")
 TASKS_TABLE = os.environ["TASKS_TABLE"]
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 
+table = dynamodb.Table(TASKS_TABLE)
+
 NY_TZ = ZoneInfo("America/New_York")
 
 def format_due_ny(due_utc: datetime) -> str:
@@ -38,7 +40,6 @@ def dm_user(user_id: str, text: str):
 
 def handler(event, context):
     task_id = event["taskId"]
-    table = dynamodb.Table(TASKS_TABLE)
     item = table.get_item(Key={"taskId": task_id}).get("Item")
     if not item:
         return {"ok": True, "skipped": "task not found"}
