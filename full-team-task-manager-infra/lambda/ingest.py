@@ -176,7 +176,7 @@ def handler(event, context):
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-1day",
                     schedule_expression=f"at({reminder_1day.strftime('%Y-%m-%dT%H:%M:%S')})",
-                    scheduleExpressionTimezone='America/New_York',
+                    ScheduleExpressionTimezone='America/New_York',
                     target_arn=REMINDER_LAMBDA_ARN,
                     payload={"taskId": task_id},
                 )
@@ -186,7 +186,7 @@ def handler(event, context):
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-50pct",
                     schedule_expression=f"at({halfway_time.strftime('%Y-%m-%dT%H:%M:%S')})",
-                    scheduleExpressionTimezone='America/New_York',
+                    ScheduleExpressionTimezone='America/New_York',
                     target_arn=REMINDER_LAMBDA_ARN,
                     payload={"taskId": task_id},
                 )
@@ -196,7 +196,7 @@ def handler(event, context):
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-10min",
                     schedule_expression="rate(10 minutes)",
-                    scheduleExpressionTimezone='America/New_York',
+                    ScheduleExpressionTimezone='America/New_York',
                     start_time=now,
                     end_time=due_at,
                     target_arn=REMINDER_LAMBDA_ARN,
@@ -208,7 +208,7 @@ def handler(event, context):
             _create_or_update_schedule(
                 name=f"task-{task_id}-nudge",
                 schedule_expression=f"at({nudge_time.strftime('%Y-%m-%dT%H:%M:%S')})",
-                scheduleExpressionTimezone='America/New_York',
+                ScheduleExpressionTimezone='America/New_York',
                 target_arn=NUDGE_LAMBDA_ARN,
                 payload={"taskId": task_id},
             )
@@ -230,7 +230,7 @@ def handler(event, context):
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-{reminder['unit']}-{reminder['amount']}",
                     schedule_expression=atTime,
-                    scheduleExpressionTimezone='America/New_York',
+                    ScheduleExpressionTimezone='America/New_York',
                     target_arn=REMINDER_LAMBDA_ARN,
                     payload={"taskId": task_id},
                 )
@@ -239,7 +239,7 @@ def handler(event, context):
             _create_or_update_schedule(
                 name=f"task-{task_id}-nudge",
                 schedule_expression=f"at({nudge_time.strftime('%Y-%m-%dT%H:%M:%S')})",
-                scheduleExpressionTimezone='America/New_York',
+                ScheduleExpressionTimezone='America/New_York',
                 target_arn=NUDGE_LAMBDA_ARN,
                 payload={"taskId": task_id},
             )
