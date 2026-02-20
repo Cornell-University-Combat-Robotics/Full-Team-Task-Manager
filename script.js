@@ -174,6 +174,22 @@ form.addEventListener("submit", async (e) => {
   statusEl.textContent = "Submitting...";
 
   try {
+    
+    for (res in reminders) {
+      minutes = 0;
+      if (res.unit == "minutes") minutes = Number(res.amount);
+      if (res.unit == "hours") minutes = Number(res.amount) * 60;
+      if (res.unit == "days") minutes = Number(res.amount) * 1440;
+      if (res.unit == "weeks") minutes = Number(res.amount) * 10080;
+
+      const dateDue = new Date(document.getElementById("dueDate").value)
+      const now = new Date();
+      now.setMinutes(now.getMinutes() + minutes)
+      if ( dateDue < now) {
+          throw new Error("Reminder is before current time")
+      }
+    }
+
     const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
