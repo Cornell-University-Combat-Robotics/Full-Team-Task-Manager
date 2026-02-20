@@ -58,7 +58,8 @@ def handler(event, context):
             reacted_users.update(r.get("users", []))
 
     # Filter out channel mentions (!channel, !here, !everyone) as they can't react
-    user_targets = [u for u in item["targets"] if not u.startswith("!")]
+    # user_targets = [u for u in item["targets"] if not u.startswith("!")]
+    user_targets = ['U09RRJMTG6S', 'U09S6H8RLFK', 'U0806AX3ANN', 'U047QD6FGD9']
     missing = [u for u in user_targets if u not in reacted_users]
 
     due_at = datetime.fromisoformat(item["dueAt"]) 
