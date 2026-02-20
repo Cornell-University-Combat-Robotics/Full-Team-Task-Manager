@@ -175,12 +175,12 @@ form.addEventListener("submit", async (e) => {
 
   try {
     
-    for (res in reminders) {
+    for (const rem of reminders) {
       minutes = 0;
-      if (res.unit == "minutes") minutes = Number(res.amount);
-      if (res.unit == "hours") minutes = Number(res.amount) * 60;
-      if (res.unit == "days") minutes = Number(res.amount) * 1440;
-      if (res.unit == "weeks") minutes = Number(res.amount) * 10080;
+      if (rem.unit == "minutes") minutes = Number(rem.amount);
+      if (rem.unit == "hours") minutes = Number(rem.amount) * 60;
+      if (rem.unit == "days") minutes = Number(rem.amount) * 1440;
+      if (rem.unit == "weeks") minutes = Number(rem.amount) * 10080;
 
       const dateDue = new Date(document.getElementById("dueDate").value)
       const now = new Date();
