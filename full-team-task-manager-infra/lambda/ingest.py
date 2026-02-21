@@ -5,8 +5,7 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo 
 import boto3
 import urllib.request
-
-import boto3
+import urllib.parse
 from botocore.exceptions import ClientError
 
 dynamodb = boto3.resource("dynamodb")
@@ -31,11 +30,21 @@ def format_due_ny(due_utc: datetime) -> str:
     return due_ny.strftime("%b %d, %Y at %I:%M %p %Z")
 
 def slack_api(method: str, payload: dict) -> dict:
-    url = f"https://slack.com/api/{method}"
-    data = json.dumps(payload).encode("utf-8")
+    # URL parameters are required for 'get' style methods
+    if method in ["reactions.get", "chat.getPermalink", "conversations.open"]:
+        params = urllib.parse.urlencode(payload)
+        url = f"https://slack.com/api/{method}?{params}"
+        data = None
+        content_type = "application/x-www-form-urlencoded"
+    else:
+        url = f"https://slack.com/api/{method}"
+        data = json.dumps(payload).encode("utf-8")
+        content_type = "application/json; charset=utf-8"
+
     req = urllib.request.Request(url, data=data, method="POST")
     req.add_header("Authorization", f"Bearer {SLACK_BOT_TOKEN}")
-    req.add_header("Content-Type", "application/json; charset=utf-8")
+    req.add_header("Content-Type", content_type)
+    
     with urllib.request.urlopen(req) as resp:
         body = resp.read().decode("utf-8")
     out = json.loads(body)
@@ -44,21 +53,12 @@ def slack_api(method: str, payload: dict) -> dict:
     return out
 
 def parse_due_datetime(due_str: str) -> datetime:
-    """
-    Interpret datetime-local input as America/New_York time, then return UTC-aware datetime.
-    Accepts:
-      - "YYYY-MM-DDTHH:mm" (from <input type="datetime-local">)
-      - ISO with timezone (e.g., "2026-01-15T14:30:00-05:00" or "...Z")
-    """
-    # If user provides timezone explicitly, respect it
     try:
         dt = datetime.fromisoformat(due_str.replace("Z", "+00:00"))
         if dt.tzinfo is not None:
             return dt.astimezone(timezone.utc)
     except ValueError:
         pass
-
-    # Otherwise treat as NY local time
     local_naive = datetime.strptime(due_str, "%Y-%m-%dT%H:%M")
     local_aware = local_naive.replace(tzinfo=NY_TZ)
     return local_aware.astimezone(timezone.utc)
@@ -68,19 +68,12 @@ def parse_targets(target: str) -> list[str]:
     ids = []
     unknown = []
     for n in names:
-        # Handle special channel mentions
-        if n in ("channel", "@channel"):
-            ids.append("!channel")
-        elif n in ("here", "@here"):
-            ids.append("!here")
-        elif n in ("everyone", "@everyone"):
-            ids.append("!everyone")
-        elif n in NAME_TO_SLACK_ID:
-            ids.append(NAME_TO_SLACK_ID[n])
-        else:
-            unknown.append(n)
-    if unknown:
-        raise ValueError(f"Unknown target name(s): {', '.join(unknown)}")
+        if n in ("channel", "@channel"): ids.append("!channel")
+        elif n in ("here", "@here"): ids.append("!here")
+        elif n in ("everyone", "@everyone"): ids.append("!everyone")
+        elif n in NAME_TO_SLACK_ID: ids.append(NAME_TO_SLACK_ID[n])
+        else: unknown.append(n)
+    if unknown: raise ValueError(f"Unknown target name(s): {', '.join(unknown)}")
     return ids
 
 def handler(event, context):
@@ -91,205 +84,95 @@ def handler(event, context):
             body = base64.b64decode(body).decode("utf-8")
         payload = json.loads(body)
 
+        # Extraction and Defaults
         task = payload["task"].strip()
         description = payload["description"].strip()
-        due_date_raw = payload["dueDate"].strip()
+        due_at = parse_due_datetime(payload["dueDate"].strip())
         target_raw = payload["target"].strip()
-        estimated_time = payload.get("estimatedTime", "").strip()
-        if estimated_time:
-            try:
-                estimated_time = float(estimated_time)
-            except ValueError:
-                estimated_time = 1.0
-        else:
-            estimated_time = 1.0  # default 1 hour
+        estimated_time = float(payload.get("estimatedTime") or 1.0)
         comment = payload.get("comment", "").strip()
         link_url = payload.get("linkUrl", "").strip()
         link_text = payload.get("linkText", "").strip()
-        remindType = payload["remindType"].strip().lower()  # normalize to lowercase
-        if remindType == "custom":
-            reminders = payload["reminders"]
-
-        due_at = parse_due_datetime(due_date_raw)
+        remindType = payload.get("remindType", "default").lower()
+        
         now = datetime.now(timezone.utc)
         if due_at <= now:
             return _resp(400, {"message": "dueDate must be in the future"})
 
         targets = parse_targets(target_raw)
-        if not targets:
-            return _resp(400, {"message": "target must include at least one Slack user ID"})
-
-        task_id = str(uuid.uuid4())
-        channel_id = os.environ["SLACK_CHANNEL_ID"]  # set this as env var, or choose based on form
-
-        # Format mentions: special channel mentions already have !, regular users need @
+        channel_id = os.environ["SLACK_CHANNEL_ID"]
         mention_str = " ".join([f"<{u}>" if u.startswith("!") else f"<@{u}>" for u in targets])
-        due_ny = due_at.astimezone(NY_TZ)
-
-        # Format hyperlink if provided (Slack format: <URL|Link Text>)
-        link_line = ""
-        if link_url:
-            if link_text:
-                link_line = f"<{link_url}|{link_text}>\n"
-            else:
-                link_line = f"<{link_url}>\n"
-
-        text = (
-            f"{mention_str}\n"
-            f"*Task:* {task} {link_line}\n"
-            f"*Description:* {description}\n"
-            f"*Due:* {format_due_ny(due_at)}\n"
-            f"*Comment:* {comment}\n\n"
-            f"Please react with ✅ for completion."
-        )
+        
+        link_line = f"<{link_url}|{link_text}>\n" if link_url and link_text else f"<{link_url}>\n" if link_url else ""
+        text = f"{mention_str}\n*Task:* {task} {link_line}\n*Description:* {description}\n*Due:* {format_due_ny(due_at)}\n*Comment:* {comment}\n\nReact with ✅ when done."
 
         slack_res = slack_api("chat.postMessage", {"channel": channel_id, "text": text})
         message_ts = slack_res["ts"]
+        task_id = str(uuid.uuid4())
 
-        permalink = None
-        try: 
-            permalink = slack_api("chat.getPermalink", {
-                "channel": channel_id,
-                "message_ts": message_ts,
-            })["permalink"]
-        except Exception as e:
-            print(f"Warning: failed to get permalink: {e}")
-            permalink = ""
         table.put_item(Item={
-            "taskId": task_id,
-            "task": task,
-            "description": description,
-            "dueAt": due_at.isoformat(),
-            "channelId": channel_id,
-            "messageTs": message_ts,
-            "targets": targets,
-            "createdAt": now.isoformat(),
-            "permalink": permalink,
-            # optional TTL: delete 30 days after due
-            "ttl": int(due_at.timestamp()) + 30 * 24 * 3600,
+            "taskId": task_id, "task": task, "description": description, "dueAt": due_at.isoformat(),
+            "channelId": channel_id, "messageTs": str(message_ts), "targets": targets,
+            "createdAt": now.isoformat(), "ttl": int(due_at.timestamp()) + (30 * 86400)
         })
 
+        # Nudge and Reminder Logic
+        due_ny = due_at.astimezone(NY_TZ)
+        nudge_time = due_ny - timedelta(hours=estimated_time)
+        
+        # Schedule Nudge
+        _create_or_update_schedule(
+            name=f"task-{task_id}-nudge",
+            schedule_expression=f"at({nudge_time.strftime('%Y-%m-%dT%H:%M:%S')})",
+            time_zone='America/New_York',
+            target_arn=NUDGE_LAMBDA_ARN,
+            payload={"taskId": task_id}
+        )
+
+        # Handle Default/Custom reminders
         if remindType == "default":
-            # Create schedules:
-            seconds_until_due = (due_at - now).total_seconds()
-            
-            # A) If due in more than 1 day: reminder 1 day before
-            if seconds_until_due > 24 * 3600:
-                reminder_1day = due_at - timedelta(days=1)
-                _create_or_update_schedule(
-                    name=f"task-{task_id}-remind-1day",
-                    schedule_expression=f"at({reminder_1day.strftime('%Y-%m-%dT%H:%M:%S')})",
-                    time_zone='America/New_York',
-                    target_arn=REMINDER_LAMBDA_ARN,
-                    payload={"taskId": task_id},
-                )
-                
-                # Also reminder at 50% time left (halfway point)
-                halfway_time = now + timedelta(seconds=seconds_until_due / 2)
-                _create_or_update_schedule(
-                    name=f"task-{task_id}-remind-50pct",
-                    schedule_expression=f"at({halfway_time.strftime('%Y-%m-%dT%H:%M:%S')})",
-                    time_zone='America/New_York',
-                    target_arn=REMINDER_LAMBDA_ARN,
-                    payload={"taskId": task_id},
-                )
-            
-            # B) If due within 24h: recurring 10-min reminders until due
-            elif seconds_until_due <= 24 * 3600:
+            # 10 minute repeat if due within 24h
+            if (due_at - now).total_seconds() <= 86400:
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-10min",
                     schedule_expression="rate(10 minutes)",
                     time_zone='America/New_York',
-                    start_time=now,
-                    end_time=due_at,
+                    start_time=now, end_time=due_at,
                     target_arn=REMINDER_LAMBDA_ARN,
-                    payload={"taskId": task_id, "mode": "fast"},
+                    payload={"taskId": task_id, "mode": "fast"}
                 )
-
-            # C) one-time nudge check based on estimated time before due
-            nudge_time = due_ny - timedelta(hours=estimated_time)
-            _create_or_update_schedule(
-                name=f"task-{task_id}-nudge",
-                schedule_expression=f"at({nudge_time.strftime('%Y-%m-%dT%H:%M:%S')})",
-                time_zone='America/New_York',
-                target_arn=NUDGE_LAMBDA_ARN,
-                payload={"taskId": task_id},
-            )
-
         elif remindType == "custom":
-            # Check unit for reminder
-            for reminder in reminders:
-                if reminder["unit"] == "minutes":
-                    remindTime = due_ny - timedelta(minutes=reminder["amount"])
-                elif reminder["unit"] == "hours":
-                    remindTime = due_ny - timedelta(hours=reminder["amount"])
-                elif reminder["unit"] == "days":
-                    remindTime = due_ny - timedelta(days=reminder["amount"])
-                elif reminder["unit"] == "weeks":
-                    remindTime = due_ny - timedelta(weeks=reminder["amount"])
-
-                atTime = f"at({remindTime.strftime('%Y-%m-%dT%H:%M:%S')})"
-                
+            for rem in payload.get("reminders", []):
+                amt = int(rem["amount"])
+                unit = rem["unit"]
+                delta = timedelta(minutes=amt) if unit == "minutes" else timedelta(hours=amt) if unit == "hours" else timedelta(days=amt)
+                rem_time = (due_ny - delta).strftime('%Y-%m-%dT%H:%M:%S')
                 _create_or_update_schedule(
-                    name=f"task-{task_id}-remind-{reminder['unit']}-{reminder['amount']}",
-                    schedule_expression=atTime,
+                    name=f"task-{task_id}-remind-{unit}-{amt}",
+                    schedule_expression=f"at({rem_time})",
                     time_zone='America/New_York',
                     target_arn=REMINDER_LAMBDA_ARN,
-                    payload={"taskId": task_id},
+                    payload={"taskId": task_id}
                 )
-            
-            nudge_time = due_ny - timedelta(hours=estimated_time)
-            _create_or_update_schedule(
-                name=f"task-{task_id}-nudge",
-                schedule_expression=f"at({nudge_time.strftime('%Y-%m-%dT%H:%M:%S')})",
-                time_zone='America/New_York',
-                target_arn=NUDGE_LAMBDA_ARN,
-                payload={"taskId": task_id},
-            )
-        # elif remindType == "no": do nothing, no reminders
 
         return _resp(200, {"taskId": task_id, "messageTs": message_ts})
-
-
-
-    except KeyError as e:
-        return _resp(400, {"message": f"Missing field: {str(e)}"})
     except Exception as e:
         return _resp(500, {"message": str(e)})
 
-def _create_or_update_schedule(name: str, schedule_expression: str, time_zone: str, target_arn: str, payload: dict,
-                               start_time: datetime | None = None, end_time: datetime | None = None):
+def _create_or_update_schedule(name, schedule_expression, time_zone, target_arn, payload, start_time=None, end_time=None):
     kwargs = {
-        "Name": name,
-        "FlexibleTimeWindow": {"Mode": "OFF"},
-        "ScheduleExpression": schedule_expression,
-        "ScheduleExpressionTimezone": time_zone,
-        "Target": {
-            "Arn": target_arn,
-            "RoleArn": SCHEDULER_INVOKE_ROLE_ARN,
-            "Input": json.dumps(payload),
-        },
-        "State": "ENABLED",
+        "Name": name, "FlexibleTimeWindow": {"Mode": "OFF"},
+        "ScheduleExpression": schedule_expression, "ScheduleExpressionTimezone": time_zone,
+        "Target": {"Arn": target_arn, "RoleArn": SCHEDULER_INVOKE_ROLE_ARN, "Input": json.dumps(payload)},
+        "State": "ENABLED"
     }
-    if start_time:
-        kwargs["StartDate"] = start_time
-    if end_time:
-        kwargs["EndDate"] = end_time
-
+    if start_time: kwargs["StartDate"] = start_time
+    if end_time: kwargs["EndDate"] = end_time
     try:
         scheduler.create_schedule(**kwargs)
     except ClientError as ce:
-        if ce.response["Error"]["Code"] in ("ConflictException",):
-            scheduler.update_schedule(**kwargs)
-        else:
-            raise
+        if ce.response["Error"]["Code"] == "ConflictException": scheduler.update_schedule(**kwargs)
+        else: raise
 
-def _resp(status: int, body: dict):
-    return {
-        "statusCode": status,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-        },
-        "body": json.dumps(body),
-    }
+def _resp(status, body):
+    return {"statusCode": status, "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"}, "body": json.dumps(body)}

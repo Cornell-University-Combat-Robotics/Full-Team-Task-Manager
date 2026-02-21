@@ -1,4 +1,4 @@
-import json, os, urllib.request
+import json, os, urllib.request, urllib.parse
 import boto3
 from zoneinfo import ZoneInfo
 from datetime import datetime
@@ -8,19 +8,27 @@ TASKS_TABLE = os.environ["TASKS_TABLE"]
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 
 table = dynamodb.Table(TASKS_TABLE)
-
 NY_TZ = ZoneInfo("America/New_York")
 
-def format_due_ny(due_utc: datetime) -> str:
-    due_ny = due_utc.astimezone(NY_TZ)
-    return due_ny.strftime("%b %d, %Y at %I:%M %p %Z")
+def format_due_ny(due_iso: str) -> str:
+    dt = datetime.fromisoformat(due_iso).astimezone(NY_TZ)
+    return dt.strftime("%b %d, %Y at %I:%M %p %Z")
 
 def slack_api(method: str, payload: dict) -> dict:
-    url = f"https://slack.com/api/{method}"
-    data = json.dumps(payload).encode("utf-8")
+    if method in ["reactions.get", "chat.getPermalink", "conversations.open"]:
+        params = urllib.parse.urlencode(payload)
+        url = f"https://slack.com/api/{method}?{params}"
+        data = None
+        content_type = "application/x-www-form-urlencoded"
+    else:
+        url = f"https://slack.com/api/{method}"
+        data = json.dumps(payload).encode("utf-8")
+        content_type = "application/json; charset=utf-8"
+
     req = urllib.request.Request(url, data=data, method="POST")
     req.add_header("Authorization", f"Bearer {SLACK_BOT_TOKEN}")
-    req.add_header("Content-Type", "application/json; charset=utf-8")
+    req.add_header("Content-Type", content_type)
+    
     with urllib.request.urlopen(req) as resp:
         body = resp.read().decode("utf-8")
     out = json.loads(body)
@@ -29,45 +37,50 @@ def slack_api(method: str, payload: dict) -> dict:
     return out
 
 def dm_user(user_id: str, text: str):
-    conv = slack_api("conversations.open", {
-        "users": user_id
-    })
+    conv = slack_api("conversations.open", {"users": user_id})
     channel_id = conv["channel"]["id"]
-    slack_api("chat.postMessage", {
-        "channel": channel_id,
-        "text": text
-    })
+    slack_api("chat.postMessage", {"channel": channel_id, "text": text})
 
 def handler(event, context):
     task_id = event["taskId"]
     item = table.get_item(Key={"taskId": task_id}).get("Item")
     if not item:
         return {"ok": True, "skipped": "task not found"}
+    
+    # Fix Timestamp format (ensure decimal dot exists)
+    ts = str(item["messageTs"])
+    formatted_ts = f"{ts[:10]}.{ts[10:]}" if "." not in ts else ts
 
-    # Fetch reactions on the original message
-    msg = slack_api("reactions.get", {
-    "channel": item["channelId"],
-    "timestamp": item["messageTs"], # Ensure this is the correct 'ts' string from DynamoDB
-    "full": True,
-    })
+    # Get current reactions
+    try:
+        msg_data = slack_api("reactions.get", {
+            "channel": item["channelId"],
+            "timestamp": formatted_ts,
+            "full": True
+        })
+    except Exception as e:
+        print(f"Failed to get reactions: {e}")
+        return {"ok": False, "error": str(e)}
 
     reacted_users = set()
-    message = msg.get("message", {})
-    for r in message.get("reactions", []):
+    reactions = msg_data.get("message", {}).get("reactions", [])
+    for r in reactions:
         if r.get("name") == "white_check_mark":
             reacted_users.update(r.get("users", []))
 
-    # Filter out channel mentions (!channel, !here, !everyone) as they can't react
-    # user_targets = [u for u in item["targets"] if not u.startswith("!")]
-    # user_targets = ['U09RRJMTG6S', 'U09S6H8RLFK', 'U0806AX3ANN', 'U047QD6FGD9']
-    user_targets = ['U047QD6FGD9']
-    missing = [u for u in user_targets if u not in reacted_users]
+    # Identify missing users (exclude channel wide mentions like !channel)
+    targets = item.get("targets", ['U047QD6FGD9'])
+    missing = [u for u in targets if u not in reacted_users and not u.startswith("!")]
 
-    due_at = datetime.fromisoformat(item["dueAt"]) 
+    if not missing:
+        return {"ok": True, "message": "All assigned users have reacted."}
+
+    # Nudge missing users
+    due_str = format_due_ny(item["dueAt"])
     for u in missing:
         try:
-            dm_user(u, f"You haven't completed ✅ task *{item['task']}* due {format_due_ny(due_at)}. Please complete the task ASAP.")
+            dm_user(u, f"Friendly nudge! You haven't completed ✅ task: *{item['task']}*.\nIt is due: {due_str}")
         except Exception as e:
             print(f"Failed to DM {u}: {e}")
 
-    return {"ok": True, "missing": missing}
+    return {"ok": True, "nudge_sent_to": missing}
