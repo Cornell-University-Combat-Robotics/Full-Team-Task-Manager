@@ -190,6 +190,9 @@ form.addEventListener("submit", async (e) => {
       }
     }
 
+
+    console.log("Final Payload:", JSON.stringify(payload, null, 2));
+      
     const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
