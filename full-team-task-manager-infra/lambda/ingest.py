@@ -97,9 +97,12 @@ def handler(event, context):
         target_raw = payload["target"].strip()
         estimated_time = payload.get("estimatedTime", "").strip()
         if estimated_time:
-            estimated_time = int(estimated_time)
+            try:
+                estimated_time = float(estimated_time)
+            except ValueError:
+                estimated_time = 1.0
         else:
-            estimated_time = 1  # default 1 hour
+            estimated_time = 1.0  # default 1 hour
         comment = payload.get("comment", "").strip()
         link_url = payload.get("linkUrl", "").strip()
         link_text = payload.get("linkText", "").strip()
