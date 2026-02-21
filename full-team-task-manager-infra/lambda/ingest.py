@@ -186,7 +186,7 @@ def handler(event, context):
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-50pct",
                     schedule_expression=f"at({halfway_time.strftime('%Y-%m-%dT%H:%M:%S')})",
-                    ScheduleExpressionTimezone='America/New_York',
+                    time_zone='America/New_York',
                     target_arn=REMINDER_LAMBDA_ARN,
                     payload={"taskId": task_id},
                 )
@@ -196,7 +196,7 @@ def handler(event, context):
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-10min",
                     schedule_expression="rate(10 minutes)",
-                    ScheduleExpressionTimezone='America/New_York',
+                    time_zone='America/New_York',
                     start_time=now,
                     end_time=due_at,
                     target_arn=REMINDER_LAMBDA_ARN,
@@ -204,11 +204,11 @@ def handler(event, context):
                 )
 
             # C) one-time nudge check based on estimated time before due
-            nudge_time = due_at - timedelta(hours=estimated_time)
+            nudge_time = due_ny - timedelta(hours=estimated_time)
             _create_or_update_schedule(
                 name=f"task-{task_id}-nudge",
                 schedule_expression=f"at({nudge_time.strftime('%Y-%m-%dT%H:%M:%S')})",
-                ScheduleExpressionTimezone='America/New_York',
+                time_zone='America/New_York',
                 target_arn=NUDGE_LAMBDA_ARN,
                 payload={"taskId": task_id},
             )
@@ -230,16 +230,16 @@ def handler(event, context):
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-{reminder['unit']}-{reminder['amount']}",
                     schedule_expression=atTime,
-                    ScheduleExpressionTimezone='America/New_York',
+                    time_zone='America/New_York',
                     target_arn=REMINDER_LAMBDA_ARN,
                     payload={"taskId": task_id},
                 )
             
-            nudge_time = due_at - timedelta(hours=estimated_time)
+            nudge_time = due_ny - timedelta(hours=estimated_time)
             _create_or_update_schedule(
                 name=f"task-{task_id}-nudge",
                 schedule_expression=f"at({nudge_time.strftime('%Y-%m-%dT%H:%M:%S')})",
-                ScheduleExpressionTimezone='America/New_York',
+                time_zone='America/New_York',
                 target_arn=NUDGE_LAMBDA_ARN,
                 payload={"taskId": task_id},
             )
