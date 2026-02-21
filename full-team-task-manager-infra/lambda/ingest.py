@@ -176,7 +176,7 @@ def handler(event, context):
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-1day",
                     schedule_expression=f"at({reminder_1day.strftime('%Y-%m-%dT%H:%M:%S')})",
-                    ScheduleExpressionTimezone='America/New_York',
+                    time_zone='America/New_York',
                     target_arn=REMINDER_LAMBDA_ARN,
                     payload={"taskId": task_id},
                 )
@@ -254,12 +254,13 @@ def handler(event, context):
     except Exception as e:
         return _resp(500, {"message": str(e)})
 
-def _create_or_update_schedule(name: str, schedule_expression: str, target_arn: str, payload: dict,
+def _create_or_update_schedule(name: str, schedule_expression: str, time_zone: str, target_arn: str, payload: dict,
                                start_time: datetime | None = None, end_time: datetime | None = None):
     kwargs = {
         "Name": name,
         "FlexibleTimeWindow": {"Mode": "OFF"},
         "ScheduleExpression": schedule_expression,
+        "ScheduleExpressionTimezone": time_zone,
         "Target": {
             "Arn": target_arn,
             "RoleArn": SCHEDULER_INVOKE_ROLE_ARN,
