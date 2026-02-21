@@ -142,11 +142,13 @@ form.addEventListener("submit", async (e) => {
     targetValue = targetSelect.value;
   }
 
+  const estInput = document.getElementById("estimatedTime");
+
   const payload = {
     task: document.getElementById("task").value.trim(),
     description: document.getElementById("description").value.trim(),
     dueDate: document.getElementById("dueDate").value, // "YYYY-MM-DDTHH:mm"
-    estimatedTime: document.getElementById("estimatedTime")?.value.trim() || "",
+    estimatedTime: estInput && estInput.value ? estInput.value : "1",
     target: targetValue,
     remindType: remindValue,
     linkUrl: document.getElementById("linkUrl")?.value.trim() || "",
@@ -192,7 +194,7 @@ form.addEventListener("submit", async (e) => {
 
 
     console.log("Final Payload:", JSON.stringify(payload, null, 2));
-      
+
     const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
