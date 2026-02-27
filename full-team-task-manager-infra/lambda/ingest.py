@@ -132,14 +132,56 @@ def handler(event, context):
         # Handle Default/Custom reminders
         if remindType == "default":
             # 10 minute repeat if due within 24h
-            if (due_at - now).total_seconds() <= 86400:
+            # if (due_at - now).total_seconds() <= 86400:
+            #     _create_or_update_schedule(
+            #         name=f"task-{task_id}-remind-10min",
+            #         schedule_expression="rate(10 minutes)",
+            #         time_zone='America/New_York',
+            #         start_time=now, end_time=due_at,
+            #         target_arn=REMINDER_LAMBDA_ARN,
+            #         payload={"taskId": task_id, "mode": "fast"}
+            #     )
+            def get_7pm_ny(base_dt):
+                return base_dt.astimezone(NY_TZ).replace(hour=19, minute=0, second=0, microsecond=0)
+
+            # 1. 7 PM the Day Before
+            day_before_7pm = get_7pm_ny(due_at - timedelta(days=1))
+            if now < day_before_7pm < due_at:
                 _create_or_update_schedule(
-                    name=f"task-{task_id}-remind-10min",
-                    schedule_expression="rate(10 minutes)",
+                    name=f"task-{task_id}-remind-7pm-before",
+                    schedule_expression=f"at({day_before_7pm.strftime('%Y-%m-%dT%H:%M:%S')})",
                     time_zone='America/New_York',
-                    start_time=now, end_time=due_at,
                     target_arn=REMINDER_LAMBDA_ARN,
-                    payload={"taskId": task_id, "mode": "fast"}
+                    payload={"taskId": task_id}
+                )
+
+            # 2. 7 PM the Day Of
+            day_of_7pm = get_7pm_ny(due_at)
+            if now < day_of_7pm < due_at:
+                _create_or_update_schedule(
+                    name=f"task-{task_id}-remind-7pm-of",
+                    schedule_expression=f"at({day_of_7pm.strftime('%Y-%m-%dT%H:%M:%S')})",
+                    time_zone='America/New_York',
+                    target_arn=REMINDER_LAMBDA_ARN,
+                    payload={"taskId": task_id}
+                )
+
+            # 3. 50% Time Mark with 12am-8am logic
+            total_duration = due_at - now
+            halfway_time = now + (total_duration / 2)
+            halfway_ny = halfway_time.astimezone(NY_TZ)
+
+            # If 50% mark falls between 12:00 AM and 7:59 AM, shift to 8:00 AM
+            if 0 <= halfway_ny.hour < 8:
+                halfway_ny = halfway_ny.replace(hour=8, minute=0, second=0, microsecond=0)
+            
+            if now < halfway_ny < due_at:
+                _create_or_update_schedule(
+                    name=f"task-{task_id}-remind-halfway",
+                    schedule_expression=f"at({halfway_ny.strftime('%Y-%m-%dT%H:%M:%S')})",
+                    time_zone='America/New_York',
+                    target_arn=REMINDER_LAMBDA_ARN,
+                    payload={"taskId": task_id}
                 )
         elif remindType == "custom":
             for rem in payload.get("reminders", []):
@@ -147,6 +189,9 @@ def handler(event, context):
                 unit = rem["unit"]
                 delta = timedelta(minutes=amt) if unit == "minutes" else timedelta(hours=amt) if unit == "hours" else timedelta(days=amt)
                 rem_time = (due_ny - delta).strftime('%Y-%m-%dT%H:%M:%S')
+                rem_time_ny = rem_time.astimezone(NY_TZ)
+                if 0 <= rem_time_ny.hour < 8:
+                    rem_time_ny = rem_time_ny.replace(hour=8, minute=0, second=0, microsecond=0) 
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-{unit}-{amt}",
                     schedule_expression=f"at({rem_time})",
