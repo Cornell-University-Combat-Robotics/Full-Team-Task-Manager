@@ -142,7 +142,7 @@ def handler(event, context):
             #         payload={"taskId": task_id, "mode": "fast"}
             #     )
             def get_7pm_ny(base_dt):
-                return base_dt.astimezone(NY_TZ).replace(hour=19, minute=0, second=0, microsecond=0)
+                return base_dt.replace(hour=19, minute=0, second=0, microsecond=0)
 
             # 1. 7 PM the Day Before
             day_before_7pm = get_7pm_ny(due_at - timedelta(days=1))
@@ -169,7 +169,7 @@ def handler(event, context):
             # 3. 50% Time Mark with 12am-8am logic
             total_duration = due_at - now
             halfway_time = now + (total_duration / 2)
-            halfway_ny = halfway_time.astimezone(NY_TZ)
+            halfway_ny = halfway_time
 
             # If 50% mark falls between 12:00 AM and 7:59 AM, shift to 8:00 AM
             if 0 <= halfway_ny.hour < 8:
@@ -188,14 +188,14 @@ def handler(event, context):
                 amt = int(rem["amount"])
                 unit = rem["unit"]
                 delta = timedelta(minutes=amt) if unit == "minutes" else timedelta(hours=amt) if unit == "hours" else timedelta(days=amt)
-                rem_time_ny = (due_at - delta).astimezone(NY_TZ)
+                rem_time_ny = (due_at - delta)
                 if 0 <= rem_time_ny.hour < 8:
                     rem_time_ny = rem_time_ny.replace(hour=8, minute=0, second=0, microsecond=0)
                
                 if now < rem_time_ny < due_at:
                     _create_or_update_schedule(
                         name=f"task-{task_id}-remind-{unit}-{amt}",
-                        schedule_expression=f"at({rem_time_ny})",
+                        schedule_expression=f"at({rem_time_ny.strftime('%Y-%m-%dT%H:%M:%S')})",
                         time_zone='America/New_York',
                         target_arn=REMINDER_LAMBDA_ARN,
                         payload={"taskId": task_id}

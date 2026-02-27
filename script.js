@@ -150,6 +150,7 @@ form.addEventListener("submit", async (e) => {
     dueDate: document.getElementById("dueDate").value, // "YYYY-MM-DDTHH:mm"
     estimatedTime: estInput && estInput.value ? estInput.value : "1",
     target: targetValue,
+    comment: document.getElementById("comment")?.value.trim() || "",
     remindType: remindValue,
     linkUrl: document.getElementById("linkUrl")?.value.trim() || "",
     linkText: document.getElementById("linkText")?.value.trim() || "",
