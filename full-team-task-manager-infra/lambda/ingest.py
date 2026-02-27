@@ -145,7 +145,7 @@ def handler(event, context):
                 return base_dt.replace(hour=19, minute=0, second=0, microsecond=0)
 
             # 1. 7 PM the Day Before
-            day_before_7pm = get_7pm_ny(due_at - timedelta(days=1))
+            day_before_7pm = get_7pm_ny(due_at - timedelta(days=2))
             if now < day_before_7pm < due_at:
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-7pm-before",
@@ -156,7 +156,7 @@ def handler(event, context):
                 )
 
             # 2. 7 PM the Day Of
-            day_of_7pm = get_7pm_ny(due_at)
+            day_of_7pm = get_7pm_ny(due_at - timedelta(days=1))
             if now < day_of_7pm < due_at:
                 _create_or_update_schedule(
                     name=f"task-{task_id}-remind-7pm-of",
