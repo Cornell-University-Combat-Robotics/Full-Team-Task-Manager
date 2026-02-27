@@ -2,7 +2,7 @@ import json
 import os
 import uuid
 from datetime import datetime, timezone, timedelta
-from zoneinfo import ZoneInfo 
+from zoneinfo import ZoneInfo
 import boto3
 import urllib.request
 import urllib.parse
@@ -44,7 +44,7 @@ def slack_api(method: str, payload: dict) -> dict:
     req = urllib.request.Request(url, data=data, method="POST")
     req.add_header("Authorization", f"Bearer {SLACK_BOT_TOKEN}")
     req.add_header("Content-Type", content_type)
-    
+   
     with urllib.request.urlopen(req) as resp:
         body = resp.read().decode("utf-8")
     out = json.loads(body)
@@ -94,7 +94,7 @@ def handler(event, context):
         link_url = payload.get("linkUrl", "").strip()
         link_text = payload.get("linkText", "").strip()
         remindType = payload.get("remindType", "default").lower()
-        
+       
         now = datetime.now(timezone.utc)
         if due_at <= now:
             return _resp(400, {"message": "dueDate must be in the future"})
@@ -102,7 +102,7 @@ def handler(event, context):
         targets = parse_targets(target_raw)
         channel_id = os.environ["SLACK_CHANNEL_ID"]
         mention_str = " ".join([f"<{u}>" if u.startswith("!") else f"<@{u}>" for u in targets])
-        
+       
         link_line = f"<{link_url}|{link_text}>\n" if link_url and link_text else f"<{link_url}>\n" if link_url else ""
         text = f"{mention_str}\n*Task:* {task} {link_line}\n*Description:* {description}\n*Due:* {format_due_ny(due_at)}\n*Comment:* {comment}\n\nReact with ✅ when done."
 
@@ -119,7 +119,7 @@ def handler(event, context):
         # Nudge and Reminder Logic
         due_ny = due_at.astimezone(NY_TZ)
         nudge_time = due_ny - timedelta(hours=estimated_time)
-        
+       
         # Schedule Nudge
         _create_or_update_schedule(
             name=f"task-{task_id}-nudge",
@@ -132,28 +132,74 @@ def handler(event, context):
         # Handle Default/Custom reminders
         if remindType == "default":
             # 10 minute repeat if due within 24h
-            if (due_at - now).total_seconds() <= 86400:
+            # if (due_at - now).total_seconds() <= 86400:
+            #     _create_or_update_schedule(
+            #         name=f"task-{task_id}-remind-10min",
+            #         schedule_expression="rate(10 minutes)",
+            #         time_zone='America/New_York',
+            #         start_time=now, end_time=due_at,
+            #         target_arn=REMINDER_LAMBDA_ARN,
+            #         payload={"taskId": task_id, "mode": "fast"}
+            #     )
+            def get_7pm_ny(base_dt):
+                return base_dt.astimezone(NY_TZ).replace(hour=19, minute=0, second=0, microsecond=0)
+
+            # 1. 7 PM the Day Before
+            day_before_7pm = get_7pm_ny(due_at - timedelta(days=1))
+            if now < day_before_7pm < due_at:
                 _create_or_update_schedule(
-                    name=f"task-{task_id}-remind-10min",
-                    schedule_expression="rate(10 minutes)",
+                    name=f"task-{task_id}-remind-7pm-before",
+                    schedule_expression=f"at({day_before_7pm.strftime('%Y-%m-%dT%H:%M:%S')})",
                     time_zone='America/New_York',
-                    start_time=now, end_time=due_at,
                     target_arn=REMINDER_LAMBDA_ARN,
-                    payload={"taskId": task_id, "mode": "fast"}
+                    payload={"taskId": task_id}
+                )
+
+            # 2. 7 PM the Day Of
+            day_of_7pm = get_7pm_ny(due_at)
+            if now < day_of_7pm < due_at:
+                _create_or_update_schedule(
+                    name=f"task-{task_id}-remind-7pm-of",
+                    schedule_expression=f"at({day_of_7pm.strftime('%Y-%m-%dT%H:%M:%S')})",
+                    time_zone='America/New_York',
+                    target_arn=REMINDER_LAMBDA_ARN,
+                    payload={"taskId": task_id}
+                )
+
+            # 3. 50% Time Mark with 12am-8am logic
+            total_duration = due_at - now
+            halfway_time = now + (total_duration / 2)
+            halfway_ny = halfway_time.astimezone(NY_TZ)
+
+            # If 50% mark falls between 12:00 AM and 7:59 AM, shift to 8:00 AM
+            if 0 <= halfway_ny.hour < 8:
+                halfway_ny = halfway_ny.replace(hour=8, minute=0, second=0, microsecond=0)
+           
+            if now < halfway_ny < due_at:
+                _create_or_update_schedule(
+                    name=f"task-{task_id}-remind-halfway",
+                    schedule_expression=f"at({halfway_ny.strftime('%Y-%m-%dT%H:%M:%S')})",
+                    time_zone='America/New_York',
+                    target_arn=REMINDER_LAMBDA_ARN,
+                    payload={"taskId": task_id}
                 )
         elif remindType == "custom":
             for rem in payload.get("reminders", []):
                 amt = int(rem["amount"])
                 unit = rem["unit"]
                 delta = timedelta(minutes=amt) if unit == "minutes" else timedelta(hours=amt) if unit == "hours" else timedelta(days=amt)
-                rem_time = (due_ny - delta).strftime('%Y-%m-%dT%H:%M:%S')
-                _create_or_update_schedule(
-                    name=f"task-{task_id}-remind-{unit}-{amt}",
-                    schedule_expression=f"at({rem_time})",
-                    time_zone='America/New_York',
-                    target_arn=REMINDER_LAMBDA_ARN,
-                    payload={"taskId": task_id}
-                )
+                rem_time_ny = (due_at - delta).astimezone(NY_TZ)
+                if 0 <= rem_time_ny.hour < 8:
+                    rem_time_ny = rem_time_ny.replace(hour=8, minute=0, second=0, microsecond=0)
+               
+                if now < rem_time_ny < due_at:
+                    _create_or_update_schedule(
+                        name=f"task-{task_id}-remind-{unit}-{amt}",
+                        schedule_expression=f"at({rem_time_ny})",
+                        time_zone='America/New_York',
+                        target_arn=REMINDER_LAMBDA_ARN,
+                        payload={"taskId": task_id}
+                    )
 
         return _resp(200, {"taskId": task_id, "messageTs": message_ts})
     except Exception as e:
