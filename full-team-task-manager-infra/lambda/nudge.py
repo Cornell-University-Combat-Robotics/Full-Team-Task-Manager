@@ -69,7 +69,8 @@ def handler(event, context):
             reacted_users.update(r.get("users", []))
 
     # Identify missing users (exclude channel wide mentions like !channel)
-    targets = item.get("targets", ['U047QD6FGD9'])
+    # targets = item.get("targets", [])
+    targets = ['U048E6QP8C8', 'U047HT1JFAA', 'U009RRJMTG6S', 'U0622T7AY3Y', 'U0806AWTK42', 'U0629DTASNP', 'U062N61J125', 'U0806AX3ANN', 'U09SMUVBRQQ', 'U09RM870LH1', 'U0626JXR23X', 'U0629GL6B26', 'U09S6H8RLFK', 'U0808RWA0GL', 'U047HT1KUVC',  'U0629GKTWJW', 'U080K1N1801', 'U07VDN683K8', 'U09S6H7BM4HU', 'U047QD6FGD9',  'U07V5QHS18FU', 'U07VDN6310EU', 'U09RRJP2C78', 'U0808RWEEDS', 'U0629DV3STV', 'U0806AWQX1QU', 'U0803FC1G8MU', 'U0629DUCJAF', 'U0626JWR52RU', 'U047MGYRZ61', 'U047SV1E5C4', 'U062N63DNL9', 'U061V0VDMHVU', 'U062YGF5Q0YU', 'U047QD6DNJX',  'U08068A2T43', 'U0479UV8J3HU', 'U080V4Z3MR6', 'U09RTL1RPRQU', 'U09RC6UMF2TU', 'U09RQ6NKE2ZU', 'U09RM877WUT', 'U09RRJRD7N2', 'U09RC6NTEQPU', 'U09RM89FAEPU', 'U09S6H5EDA5', 'U09S6H8LATBU', 'U09RRJVHUB0U', 'U09RX74D276']
     missing = [u for u in targets if u not in reacted_users and not u.startswith("!")]
 
     if not missing:
@@ -79,7 +80,7 @@ def handler(event, context):
     due_str = format_due_ny(item["dueAt"])
     for u in missing:
         try:
-            dm_user(u, f"Friendly nudge! You haven't completed ✅ task: *{item['task']}*.\nIt is due: {due_str}")
+            dm_user(u, f"Final Reminder! You haven't completed ✅ task: *{item['task']}*.\nIt is due: {due_str}\n\nPlease ignore this messsge if you have completed the task and forget to react with ✅")
         except Exception as e:
             print(f"Failed to DM {u}: {e}")
 
