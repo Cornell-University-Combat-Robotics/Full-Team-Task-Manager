@@ -108,6 +108,11 @@ def handler(event, context):
 
         slack_res = slack_api("chat.postMessage", {"channel": channel_id, "text": text})
         message_ts = slack_res["ts"]
+        slack_api("reactions.add", {
+            "channel": channel_id,
+            "timestamp": message_ts,
+            "name": "white_check_mark" 
+        })
         task_id = str(uuid.uuid4())
 
         table.put_item(Item={

@@ -187,7 +187,6 @@ form.addEventListener("submit", async (e) => {
 
       const dateDue = new Date(document.getElementById("dueDate").value)
       const now = new Date();
-      now.setMinutes(now.getMinutes() + minutes - 300)
       if ( dateDue < now) {
           throw new Error("Reminder is before current time")
       }
